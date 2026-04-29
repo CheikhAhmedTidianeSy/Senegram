@@ -1,0 +1,29 @@
+/**
+ * Helpers WebRTC.
+ * Les serveurs TURN (si nécessaires) peuvent être ajoutés via variables
+ * d'environnement : VITE_TURN_URL, VITE_TURN_USERNAME, VITE_TURN_PASSWORD.
+ */
+export function buildIceServers() {
+  const ice = [{ urls: "stun:stun.l.google.com:19302" }];
+  const turn = import.meta.env.VITE_TURN_URL;
+  if (turn) {
+    ice.push({
+      urls: turn,
+      username: import.meta.env.VITE_TURN_USERNAME,
+      credential: import.meta.env.VITE_TURN_PASSWORD,
+    });
+  }
+  return ice;
+}
+
+export async function getMediaStream(video) {
+  return await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: video ? { width: 1280, height: 720 } : false,
+  });
+}
+
+export function stopStream(stream) {
+  if (!stream) return;
+  stream.getTracks().forEach((t) => t.stop());
+}
