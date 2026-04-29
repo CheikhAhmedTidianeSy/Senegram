@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  background: #0b1220;
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  color: #0f172a;
+}
+
+/* Scrollbar élégante */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 hover:bg-brand-700 text-white shadow-soft disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply btn text-ink-700 hover:bg-ink-100;
+  }
+  .input {
+    @apply w-full px-4 py-3 rounded-xl bg-white border border-ink-200
+           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
+           placeholder:text-ink-500 transition;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-soft;
+  }
+
+  /* Fond paysagé discret pour la zone "aucune conv sélectionnée" */
+  .chat-empty-bg {
+    background:
+      radial-gradient(1200px 600px at 20% 20%, rgba(16,185,129,0.15), transparent 60%),
+      radial-gradient(800px 500px at 80% 80%, rgba(253, 239, 66, 0.12), transparent 55%),
+      linear-gradient(180deg, #f8fafc, #eef2f7);
+  }
+
+  /* Bulle message */
+  .bubble {
+    @apply relative max-w-[75%] px-4 py-2 rounded-2xl shadow-bubble;
+    word-wrap: break-word;
+  }
+  .bubble-me   { @apply bg-brand-600 text-white rounded-br-md; }
+  .bubble-them { @apply bg-white text-ink-900 rounded-bl-md border border-ink-100; }
+
+  /* Point statut présence */
+  .presence-dot {
+    @apply absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-white;
+  }
+}
+
+/* Loader circulaire utilisé dans les appels */
+.spin-slow {
+  animation: spin 2s linear infinite;
+}
