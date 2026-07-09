@@ -168,8 +168,8 @@ senegram/
 ### 1️⃣ Cloner le projet
 
 ```bash
-git clone https://github.com/realtidiane/senegram.git
-cd senegram
+git clone https://github.com/CheikhAhmedTidianeSy/Senegram.git
+cd Senegram
 ```
 
 ### 2️⃣ Importer la base de données
@@ -430,7 +430,7 @@ Ce projet est distribué sous licence **MIT**. Tu peux l'utiliser, le modifier e
 
 ## 👤 Auteur
 
-**realtidiane**
+**Cheikh Ahmed Tidiane Sy** — [@CheikhAhmedTidianeSy](https://github.com/CheikhAhmedTidianeSy)
 
 🇸🇳 *Made with **teranga** in Sénégal.*
 
