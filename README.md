@@ -428,10 +428,17 @@ Ce projet est distribué sous licence **MIT**. Tu peux l'utiliser, le modifier e
 
 ---
 
-## 👤 Auteur
+## 👥 Équipe
 
-**Cheikh Ahmed Tidiane Sy** — [@CheikhAhmedTidianeSy](https://github.com/CheikhAhmedTidianeSy)
+| Nom | Rôle | Email |
+|-----|------|-------|
+| **Cheikh Tidiane Sy** | Développeur Backend & UI/UX | cheikhahmedtidiane.sy2@unchk.edu.sn |
+| **Mouhamadou Falilou Sarr** | Développeur Frontend | mouhamadoufalilou.sarr@unchk.edu.sn |
+| **Saly Faye** | Cheffe de projet | saly.faye5@unchk.edu.sn |
+| **Babacar Sow** | Tests & Assurance qualité | babacar.sow6@unchk.edu.sn |
+| **Meissa Touré** | Base de données & DevOps | meissa.toure@unchk.edu.sn |
+| **Fatou Diop** | Documentation & Support UI/UX | fatou.diop109@unchk.edu.sn |
 
-🇸🇳 *Made with **teranga** in Sénégal.*
+🇸🇳 *Made with **teranga** in Sénégal — UNCHK.*
 
 Si Senegram t'a été utile, n'hésite pas à laisser une ⭐ sur le repo !
