@@ -42,3 +42,6 @@ desktop.ini
 
 # Claude Code
 .claude/
+README.md
+DEPLOY_VERCEL.md
+DEPLOY_RENDER_VERCEL.md
