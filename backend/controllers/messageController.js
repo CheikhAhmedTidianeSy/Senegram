@@ -156,22 +156,22 @@ exports.list = async (req, res, next) => {
     if (!member) return res.status(403).json({ message: "Accès refusé" });
 
     const before = req.query.before ? Number(req.query.before) : null;
-    const limit = Math.min(Number(req.query.limit) || 40, 100);
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
 
     const [rows] = await pool.query(
-      `SELECT m.*,
-              rm.content AS reply_content,
-              rm.type AS reply_type,
-              ru.username AS reply_sender_username,
-              ru.display_name AS reply_sender_name,
-              u.username AS sender_username,
-              u.display_name AS sender_name,
-              u.avatar_url AS sender_avatar
+      `SELECT m.id, m.conversation_id, m.sender_id, m.content, m.type,
+              m.reply_to_id, m.is_edited, m.is_deleted, m.created_at,
+              m.sent_at, m.delivered_at, m.read_at, m.is_pinned, m.pinned_by, m.pinned_at,
+              u.username AS sender_username, u.display_name AS sender_name,
+              u.avatar_url AS sender_avatar,
+              rm.content AS reply_content, rm.type AS reply_type,
+              ru.username AS reply_sender_username, ru.display_name AS reply_sender_name
        FROM messages m
        JOIN users u ON u.id = m.sender_id
        LEFT JOIN messages rm ON rm.id = m.reply_to_id
        LEFT JOIN users ru ON ru.id = rm.sender_id
        WHERE m.conversation_id = ?
+         AND m.is_deleted = 0
          ${before ? "AND m.id < ?" : ""}
        ORDER BY m.id DESC
        LIMIT ?`,

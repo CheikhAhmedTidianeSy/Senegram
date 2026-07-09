@@ -82,6 +82,81 @@ async function buildConversation(convId, userId) {
 
 exports.list = async (req, res, next) => {
   try {
+    const userId = req.user.id;
+
+    // Single optimized query with subqueries for last_message and unread_count
+    const [rows] = await pool.query(
+      `SELECT 
+        c.id, c.type, c.name, c.description, c.avatar_url, c.created_by, c.created_at, c.updated_at,
+        -- last message
+        lm.id AS last_msg_id, lm.content AS last_msg_content, lm.type AS last_msg_type,
+        lm.created_at AS last_msg_created_at, lm.sender_id AS last_msg_sender_id,
+        lm_u.display_name AS last_msg_sender_name,
+        -- unread count
+        (
+          SELECT COUNT(*) 
+          FROM messages m2
+          LEFT JOIN conversation_members cm2
+            ON cm2.conversation_id = m2.conversation_id AND cm2.user_id = ?
+          WHERE m2.conversation_id = c.id
+            AND m2.sender_id <> ?
+            AND m2.is_deleted = 0
+            AND (cm2.last_read_message_id IS NULL OR m2.id > cm2.last_read_message_id)
+        ) AS unread_count,
+        -- members (only ids + roles, lightweight)
+        (
+          SELECT JSON_ARRAYAGG(JSON_OBJECT(
+            'id', u.id, 'username', u.username, 'email', u.email, 'phone', u.phone,
+            'bio', u.bio, 'display_name', u.display_name, 'avatar_url', u.avatar_url,
+            'status', u.status, 'is_online', u.is_online, 'last_seen', u.last_seen,
+            'alias', c2.alias, 'role', cm.role, 'is_muted', cm.is_muted,
+            'last_read_message_id', cm.last_read_message_id
+          ))
+          FROM conversation_members cm
+          JOIN users u ON u.id = cm.user_id
+          LEFT JOIN contacts c2 ON c2.user_id = ? AND c2.contact_user_id = u.id
+          WHERE cm.conversation_id = c.id
+        ) AS members
+       FROM conversations c
+       JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?
+       LEFT JOIN (
+         SELECT m.id, m.content, m.type, m.created_at, m.sender_id, m.conversation_id,
+                u.display_name
+         FROM messages m
+         JOIN users u ON u.id = m.sender_id
+         WHERE m.is_deleted = 0
+       ) lm ON lm.conversation_id = c.id
+       LEFT JOIN users lm_u ON lm_u.id = lm.sender_id
+       WHERE lm.id = (
+         SELECT MAX(id) FROM messages 
+         WHERE conversation_id = c.id AND is_deleted = 0
+       ) OR lm.id IS NULL
+       ORDER BY c.updated_at DESC`,
+      [userId, userId, userId, userId],
+    );
+
+    // Parse JSON members
+    const conversations = rows.map(r => ({
+      ...r,
+      members: r.members ? JSON.parse(r.members) : [],
+      last_message: r.last_msg_id ? {
+        id: r.last_msg_id,
+        content: r.last_msg_content,
+        type: r.last_msg_type,
+        created_at: r.last_msg_created_at,
+        sender_id: r.last_msg_sender_id,
+        sender_name: r.last_msg_sender_name,
+      } : null,
+      unread_count: Number(r.unread_count || 0),
+    }));
+
+    res.json({ conversations });
+  } catch (err) { next(err); }
+};
+}
+
+exports.list = async (req, res, next) => {
+  try {
     const [rows] = await pool.query(
       `SELECT c.id
        FROM conversations c

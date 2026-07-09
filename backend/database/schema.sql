@@ -79,8 +79,10 @@ CREATE TABLE IF NOT EXISTS messages (
   pinned_at       DATETIME DEFAULT NULL,
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_messages_conv (conversation_id, created_at),
+  INDEX idx_messages_conv_id_desc (conversation_id, id DESC),
   INDEX idx_messages_status (conversation_id, sender_id, delivered_at, read_at),
   INDEX idx_messages_pinned (conversation_id, is_pinned, pinned_at),
+  INDEX idx_messages_sender (sender_id, conversation_id),
   FULLTEXT INDEX idx_messages_content (content),
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -162,6 +164,13 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   UNIQUE KEY uniq_user_endpoint (user_id, endpoint),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Composite indexes for performance
+CREATE INDEX idx_messages_conv_id_deleted_id ON messages (conversation_id, is_deleted, id);
+CREATE INDEX idx_messages_conv_sender_deleted ON messages (conversation_id, sender_id, is_deleted);
+CREATE INDEX idx_conversation_members_user_conv ON conversation_members (user_id, conversation_id);
+CREATE INDEX idx_conversations_updated_type ON conversations (updated_at, type);
+CREATE INDEX idx_message_reads_user_conv ON message_reads (user_id, message_id);
 
 INSERT IGNORE INTO users (username,email,password_hash,display_name,bio,avatar_url)
 VALUES
