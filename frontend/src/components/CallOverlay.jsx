@@ -21,8 +21,15 @@ export default function CallOverlay() {
 
   useEffect(() => {
     if (localRef.current && localStream) localRef.current.srcObject = localStream;
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
-    if (remoteAudioRef.current && remoteStream) remoteAudioRef.current.srcObject = remoteStream;
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
+      console.log('[CallOverlay] Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}:${t.enabled}`));
+    }
+    if (remoteAudioRef.current && remoteStream) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(() => {});
+    }
   }, [localStream, remoteStream]);
 
   useEffect(() => {

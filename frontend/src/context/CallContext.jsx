@@ -87,6 +87,8 @@ export function CallProvider({ children }) {
     };
     pc.ontrack = (e) => {
       const stream = e.streams[0];
+      console.log('[CallContext] ontrack - stream:', stream.id, 'tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
+      stream.getAudioTracks().forEach(t => { t.enabled = true; console.log('[CallContext] Enabled audio track'); });
       remoteRef.current = stream;
       setRemoteStream(stream);
     };
