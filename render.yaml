@@ -33,3 +33,16 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:sarrfallou267@gmail.com
+      # S3-compatible storage (R2, Supabase, AWS S3, etc.)
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: "auto"
+      - key: S3_PUBLIC_URL
+        sync: false
