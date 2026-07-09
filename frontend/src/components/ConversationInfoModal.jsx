@@ -170,6 +170,11 @@ export default function ConversationInfoModal({
             />
             <div className="mt-3 font-display text-xl font-bold text-ink-900">{display.name}</div>
             <div className="text-sm text-ink-500">{isGroup ? `${conversation.members?.length || 0} membres` : display.subtitle}</div>
+            {!isGroup && peer?.bio && (
+              <div className="mt-2 text-sm text-ink-700 italic max-w-md mx-auto break-words">
+                {peer.bio}
+              </div>
+            )}
           </div>
 
           {isGroup ? (
@@ -327,7 +332,6 @@ export default function ConversationInfoModal({
                     <div className="font-medium">{peer?.phone || "Non renseigné"}</div>
                   </div>
                 </a>
-                {peer?.bio && <div className="pt-2 text-ink-700">{peer.bio}</div>}
               </div>
             </div>
           )}
