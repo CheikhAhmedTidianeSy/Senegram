@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { format } from "date-fns";
 import { Check, CheckCheck, Download, FileText, Pause, Pin, PinOff, Play, Reply, SmilePlus, Trash2 } from "lucide-react";
 import clsx from "clsx";
@@ -43,6 +43,7 @@ export default function MessageBubble({
   onPin,
   onUnpin,
   currentUserId,
+  onSwipeReply,
 }) {
   const cls = clsx(
     "bubble group",
@@ -53,7 +54,10 @@ export default function MessageBubble({
   const reactionGroups = groupedReactions(message.reactions);
   const myReaction = (message.reactions || []).find((r) => r.user_id === currentUserId);
   const [showPicker, setShowPicker] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
   const bubbleRef = useRef(null);
+  const startXRef = useRef(0);
 
   useEffect(() => {
     if (!showPicker) return;
@@ -77,12 +81,41 @@ export default function MessageBubble({
     setShowPicker(false);
   }
 
+  // Touch swipe handlers
+  const handleTouchStart = useCallback((e) => {
+    startXRef.current = e.touches[0].clientX;
+    setIsSwiping(true);
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isSwiping) return;
+    const delta = e.touches[0].clientX - startXRef.current;
+    if ((isMe && delta < 0) || (!isMe && delta > 0)) {
+      setSwipeX(Math.max(-100, Math.min(100, delta)));
+    }
+  }, [isSwiping, isMe]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isSwiping) return;
+    setIsSwiping(false);
+    if (Math.abs(swipeX) > 60) {
+      onSwipeReply?.(message);
+      setSwipeX(0);
+    } else {
+      setSwipeX(0);
+    }
+  }, [isSwiping, swipeX, onSwipeReply]);
+
   return (
     <div id={`message-${message.id}`} className={clsx("w-full flex", isMe ? "justify-end" : "justify-start")}>
       <div
         ref={bubbleRef}
         className={cls}
         onDoubleClick={() => message.type !== "system" && setShowPicker((v) => !v)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ transform: `translateX(${swipeX}px)`, transition: isSwiping ? 'none' : 'transform 0.2s ease' }}
       >
         {showPicker && message.type !== "system" && !message.is_deleted && (
           <div

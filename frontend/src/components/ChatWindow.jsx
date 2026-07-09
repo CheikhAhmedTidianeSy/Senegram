@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Video, MoreVertical, ArrowLeft, Pin, MessageCircle, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Phone, Video, MoreVertical, ArrowLeft, Pin, MessageCircle, Search, X, ArrowDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 import Avatar       from "./Avatar";
@@ -12,6 +12,17 @@ import { useAuth }    from "../context/AuthContext";
 import { useSocket }  from "../context/useSocket";
 import { useCall }    from "../context/CallContext";
 import { convDisplay } from "../utils/conversation";
+
+function formatDateLabel(d) {
+  const date = new Date(d);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
+  if (date.toDateString() === yesterday.toDateString()) return "Hier";
+  return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
 
 export default function ChatWindow({
   conversation,
@@ -26,6 +37,7 @@ export default function ChatWindow({
 
   const [messages, setMessages] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
   const [infoOpen, setInfoOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -34,10 +46,14 @@ export default function ChatWindow({
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
 
   const scrollerRef = useRef(null);
   const typingTimer = useRef(null);
   const typingStopTimers = useRef({});
+  const pullStartRef = useRef(null);
+  const hasLoadedInitial = useRef(false);
 
   const d = useMemo(() => convDisplay(conversation, user), [conversation, user]);
   const isGroup = conversation?.type === "group";
@@ -57,14 +73,37 @@ export default function ChatWindow({
     return `${names.length} personnes écrivent...`;
   }, [typingUsers, isGroup]);
 
-  // Load messages
+  // Load messages with pagination
+  const loadMessages = useCallback(async (conversationId, beforeId = null, prepend = false) => {
+    if (prepend) setLoadingMore(true);
+    else setLoading(true);
+    try {
+      const params = { limit: 50 };
+      if (beforeId) params.before_id = beforeId;
+      const { data } = await api.get(`/messages/conversation/${conversationId}`, { params });
+      const newMessages = data.messages || [];
+      if (prepend) {
+        setMessages((prev) => [...newMessages, ...prev]);
+      } else {
+        setMessages(newMessages);
+        hasLoadedInitial.current = true;
+      }
+    } catch (err) {
+      toast.error("Impossible de charger les messages");
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
+
+  // Initial load
   useEffect(() => {
     if (!conversation) return;
     let live = true;
     setLoading(true);
     api.get(`/messages/conversation/${conversation.id}`)
       .then(({ data }) => { if (live) setMessages(data.messages); })
-      .finally(() => { if (live) setLoading(false); });
+      .finally(() => { if (live) { setLoading(false); hasLoadedInitial.current = true; } });
 
     api.post(`/conversations/${conversation.id}/read`).catch(() => {});
     setTypingUsers({});
@@ -116,9 +155,7 @@ export default function ChatWindow({
     socket.emit("conversation:join", { conversation_id: conversation.id });
 
     const onNew = (m) => {
-      if (m.conversation_id !== conversation.id) {
-        return;
-      }
+      if (m.conversation_id !== conversation.id) return;
       setMessages((prev) => [...prev, m]);
       if (m.sender_id !== user.id) {
         socket.emit("message:read", {
@@ -231,10 +268,15 @@ export default function ChatWindow({
     };
   }, [socket, conversation?.id, user?.id, onConversationDeleted, onConversationUpdated]);
 
-  // Autoscroll bas
+  // Auto-scroll to bottom
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typingText]);
+
+  // Scroll to bottom on new message
+  const scrollToBottom = useCallback(() => {
+    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
+  }, []);
 
   async function sendMessage({ content, type, attachments, reply_to_id = null }) {
     try {
@@ -242,7 +284,6 @@ export default function ChatWindow({
         content, type, attachments, reply_to_id,
       });
       setMessages((prev) => {
-        // Si le serveur a déjà broadcast via socket on évite le doublon
         if (prev.some((m) => m.id === data.message.id)) return prev;
         return [...prev, data.message];
       });
@@ -334,6 +375,48 @@ export default function ChatWindow({
     if (!d.peer) return;
     startCall(d.peer, conversation.id, type);
   }
+
+  // Pull to refresh handlers
+  const handleTouchStart = (e) => {
+    if (scrollerRef.current?.scrollTop === 0 && !loadingMore) {
+      pullStartRef.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isPulling || !pullStartRef.current) return;
+    const distance = e.touches[0].clientY - pullStartRef.current;
+    if (distance > 0) {
+      setPullDistance(Math.min(distance * 0.5, 100));
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (!isPulling) return;
+    setIsPulling(false);
+    if (pullDistance > 60) {
+      await loadMessages(conversation.id, messages[0]?.id, true);
+    }
+    setPullDistance(0);
+    pullStartRef.current = null;
+  };
+
+  // Group messages by date
+  const messagesWithDates = useMemo(() => {
+    if (!messages.length) return [];
+    const result = [];
+    let lastDate = null;
+    for (const m of messages) {
+      const dateLabel = formatDateLabel(m.created_at);
+      if (dateLabel !== lastDate) {
+        result.push({ type: "date", label: dateLabel });
+        lastDate = dateLabel;
+      }
+      result.push({ type: "message", data: m });
+    }
+    return result;
+  }, [messages]);
 
   if (!conversation) {
     return (
@@ -458,7 +541,26 @@ export default function ChatWindow({
       )}
 
       {/* Messages */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-1.5 chat-pattern">
+      <div
+        ref={scrollerRef}
+        className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-1.5 chat-pattern touch-scroll"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Pull to refresh indicator */}
+        {isPulling && pullDistance > 0 && (
+          <div className="flex items-center justify-center py-2">
+            <ArrowDown
+              className={`w-5 h-5 text-ink-400 transition-transform ${pullDistance > 60 ? "rotate-180" : ""}`}
+              style={{ transform: `rotate(${pullDistance > 60 ? 180 : 0}deg)` }}
+            />
+            <span className="ml-2 text-xs text-ink-500">
+              {pullDistance > 60 ? "Relâchez pour actualiser" : "Tirez pour actualiser"}
+            </span>
+          </div>
+        )}
+
         {isGroup && pinnedMessages.length > 0 && (
           <div className="sticky top-0 z-10 mb-3 bg-white/95 backdrop-blur border border-brand-100 rounded-xl shadow-soft overflow-hidden">
             {pinnedMessages.slice(0, 3).map((m) => (
@@ -479,19 +581,28 @@ export default function ChatWindow({
             ))}
           </div>
         )}
+
         {loading
           ? <div className="mx-auto mt-8 w-fit px-4 py-2 rounded-full bg-white/80 text-ink-500 text-sm shadow-bubble">Chargement...</div>
-          : messages.length === 0
+          : messagesWithDates.length === 0
             ? <div className="mx-auto mt-12 max-w-sm text-center p-6 rounded-2xl bg-white/80 border border-white shadow-soft">
                 <MessageCircle className="w-9 h-9 mx-auto text-brand-700 mb-3" />
                 <div className="font-semibold text-ink-900">Aucun message</div>
                 <div className="text-sm text-ink-500 mt-1">Envoyez le premier message pour démarrer la conversation.</div>
               </div>
-            : messages.map((m, idx) => {
-                const prev = messages[idx - 1];
+            : messagesWithDates.map((item, idx) => {
+                if (item.type === "date") {
+                  return (
+                    <div key={`date-${idx}`} className="date-separator">
+                      <span>{item.label}</span>
+                    </div>
+                  );
+                }
+                const m = item.data;
+                const prev = messagesWithDates[idx - 1];
                 const showSender = isGroup
                   && m.sender_id !== user.id
-                  && (!prev || prev.sender_id !== m.sender_id);
+                  && (!prev || prev.type !== "message" || prev.data.sender_id !== m.sender_id);
                 return (
                   <MessageBubble
                     key={m.id}
@@ -506,13 +617,21 @@ export default function ChatWindow({
                     onDelete={deleteMessage}
                     onPin={pinMessage}
                     onUnpin={unpinMessage}
+                    onSwipeReply={setReplyTo}
                   />
                 );
               })
-        }
+          }
+
         {typingText && (
           <div className="w-fit px-3 py-1.5 rounded-full bg-white/80 text-xs text-ink-500 italic shadow-bubble">
             {typingText}
+          </div>
+        )}
+
+        {loadingMore && (
+          <div className="flex justify-center py-4">
+            <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
       </div>
