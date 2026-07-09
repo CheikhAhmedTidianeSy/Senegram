@@ -25,6 +25,7 @@ const messageRoutes      = require("./routes/messageRoutes");
 const groupRoutes        = require("./routes/groupRoutes");
 const uploadRoutes       = require("./routes/uploadRoutes");
 const callRoutes         = require("./routes/callRoutes");
+const pushRoutes         = require("./routes/pushRoutes");
 
 const socketHandler = require("./sockets");
 
@@ -125,6 +126,7 @@ app.use("/api/messages",      messageRoutes);
 app.use("/api/groups",        groupRoutes);
 app.use("/api/upload",        uploadRoutes);
 app.use("/api/calls",         callRoutes);
+app.use("/api/push",          pushRoutes);
 
 // ---------- 404 + handler global ----------
 app.use((req, res) =>

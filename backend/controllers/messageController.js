@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const { ensureMember } = require("./conversationController");
+const pushController = require("./pushController");
 
 const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "😢", "🔥"]);
 
@@ -321,6 +322,24 @@ exports.send = async (req, res, next) => {
         message_id: msgId,
         delivered_at: full.delivered_at,
       });
+    }
+
+    // Send push notifications to offline members
+    if (!hasOnlineRecipient || members.some((m) => !io.onlineUsers?.has(Number(m.user_id)))) {
+      const offlineMemberIds = members
+        .filter((m) => !io.onlineUsers?.has(Number(m.user_id)))
+        .map((m) => m.user_id);
+      if (offlineMemberIds.length) {
+        pushController.sendToUsers(offlineMemberIds, {
+          title: req.user.display_name || req.user.username,
+          body: type === "text" ? content : `[${type}]`,
+          icon: "/icons/icon-192.png",
+          badge: "/icons/badge-72.png",
+          tag: `msg-${convId}`,
+          data: { url: `/conversation/${convId}`, conversation_id: Number(convId), message_id: msgId },
+          requireInteraction: true,
+        }).catch((err) => console.error("Push send error:", err));
+      }
     }
 
     res.status(201).json({ message: full });
