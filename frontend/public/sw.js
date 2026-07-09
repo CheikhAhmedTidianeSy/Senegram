@@ -40,26 +40,36 @@ self.addEventListener('fetch', (event) => {
 
 // Push notification received
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
+  console.log('[SW] Push event received:', event);
+  if (!event.data) {
+    console.log('[SW] Push event has no data');
+    return;
+  }
   
-  const data = event.data.json();
-  const { title, body, icon, badge, tag, data: pushData } = data;
-  
-  const options = {
-    body,
-    icon: icon || '/favicon.svg',
-    badge: badge || '/favicon.svg',
-    tag: tag || 'senegram-notification',
-    data: pushData || {},
-    requireInteraction: true,
-    actions: [
-      { action: 'open', title: 'Ouvrir' },
-      { action: 'dismiss', title: 'Fermer' },
-    ],
-    vibrate: [200, 100, 200],
-  };
-  
-  event.waitUntil(self.registration.showNotification(title, options));
+  try {
+    const data = event.data.json();
+    console.log('[SW] Push data:', data);
+    const { title, body, icon, badge, tag, data: pushData } = data;
+    
+    const options = {
+      body,
+      icon: icon || '/favicon.svg',
+      badge: badge || '/favicon.svg',
+      tag: tag || 'senegram-notification',
+      data: pushData || {},
+      requireInteraction: true,
+      actions: [
+        { action: 'open', title: 'Ouvrir' },
+        { action: 'dismiss', title: 'Fermer' },
+      ],
+      vibrate: [200, 100, 200],
+    };
+    
+    console.log('[SW] Showing notification:', title, options);
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (err) {
+    console.error('[SW] Push handler error:', err);
+  }
 });
 
 // Notification click
