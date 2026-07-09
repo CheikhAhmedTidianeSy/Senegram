@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import api from "../services/api";
+import { usePush } from "./PushContext";
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -10,6 +11,7 @@ export function AuthProvider({ children }) {
   });
   const [token,   setToken]   = useState(() => localStorage.getItem("senegram_token"));
   const [loading, setLoading] = useState(true);
+  const { subscribe } = usePush();
 
   useEffect(() => {
     (async () => {
@@ -33,6 +35,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("senegram_token", data.token);
     localStorage.setItem("senegram_user",  JSON.stringify(data.user));
     setToken(data.token); setUser(data.user);
+    subscribe(); // Request push subscription after login
     return data;
   }
 
@@ -41,6 +44,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("senegram_token", data.token);
     localStorage.setItem("senegram_user",  JSON.stringify(data.user));
     setToken(data.token); setUser(data.user);
+    subscribe(); // Request push subscription after register
     return data;
   }
 

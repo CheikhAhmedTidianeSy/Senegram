@@ -113,7 +113,7 @@ export function PushProvider({ children }) {
       const { message, conversation_id, from } = data;
       if (message?.sender_id === user?.id) return; // Don't notify for own messages
       
-      if (Notification.permission === "granted" && registration) {
+      if (Notification.permission === "granted") {
         navigator.serviceWorker.ready.then((reg) => {
           reg.showNotification(`${from?.display_name || from?.username}`, {
             body: message?.content || "Nouveau message",
