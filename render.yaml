@@ -27,3 +27,9 @@ services:
         value: "true"
       - key: DB_CA_CERT
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:sarrfallou267@gmail.com
