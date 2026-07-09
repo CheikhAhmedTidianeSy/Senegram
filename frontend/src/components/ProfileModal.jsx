@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import Avatar from "./Avatar";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import PushTest from "./PushTest";
 
 export default function ProfileModal({ onClose }) {
   const { user, updateProfile, logout } = useAuth();
