@@ -5,6 +5,7 @@ const auth   = require("../middlewares/auth");
 router.use(auth);
 
 router.get   ("/conversation/:id", ctrl.list);
+router.get   ("/conversation/:id/search", ctrl.search);
 router.post  ("/conversation/:id", ctrl.send);
 router.post  ("/conversation/:id/read", ctrl.markRead);
 router.post  ("/:id/pin",          ctrl.pin);

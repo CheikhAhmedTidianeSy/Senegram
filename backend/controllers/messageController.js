@@ -11,11 +11,17 @@ const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "😢", "�
 async function hydrateMessage(msgId) {
   const [[msg]] = await pool.query(
     `SELECT m.*,
+            rm.content AS reply_content,
+            rm.type AS reply_type,
+            ru.username AS reply_sender_username,
+            ru.display_name AS reply_sender_name,
             u.username AS sender_username,
             u.display_name AS sender_name,
             u.avatar_url AS sender_avatar
      FROM messages m
      JOIN users u ON u.id = m.sender_id
+     LEFT JOIN messages rm ON rm.id = m.reply_to_id
+     LEFT JOIN users ru ON ru.id = rm.sender_id
      WHERE m.id = ?`,
     [msgId],
   );
@@ -153,11 +159,17 @@ exports.list = async (req, res, next) => {
 
     const [rows] = await pool.query(
       `SELECT m.*,
+              rm.content AS reply_content,
+              rm.type AS reply_type,
+              ru.username AS reply_sender_username,
+              ru.display_name AS reply_sender_name,
               u.username AS sender_username,
               u.display_name AS sender_name,
               u.avatar_url AS sender_avatar
        FROM messages m
        JOIN users u ON u.id = m.sender_id
+       LEFT JOIN messages rm ON rm.id = m.reply_to_id
+       LEFT JOIN users ru ON ru.id = rm.sender_id
        WHERE m.conversation_id = ?
          ${before ? "AND m.id < ?" : ""}
        ORDER BY m.id DESC
@@ -167,6 +179,74 @@ exports.list = async (req, res, next) => {
 
     const messages = (await hydrateManyMessages(rows)).reverse();
 
+    res.json({ messages });
+  } catch (err) { next(err); }
+};
+
+exports.search = async (req, res, next) => {
+  try {
+    const convId = req.params.id;
+    const member = await ensureMember(convId, req.user.id);
+    if (!member) return res.status(403).json({ message: "Accès refusé" });
+
+    const q = String(req.query.q || "").trim();
+    const filter = ["all", "messages", "photos", "media"].includes(req.query.filter)
+      ? req.query.filter
+      : "all";
+    const limit = Math.min(Number(req.query.limit) || 60, 100);
+    const where = ["m.conversation_id = ?", "m.is_deleted = 0"];
+    const params = [convId];
+    const like = `%${q}%`;
+
+    if (filter === "messages") {
+      where.push("m.content LIKE ?");
+      params.push(like);
+    } else if (filter === "photos") {
+      where.push(`EXISTS (
+        SELECT 1 FROM attachments a
+        WHERE a.message_id = m.id AND a.mime_type LIKE 'image/%'
+          ${q ? "AND (a.file_name LIKE ? OR m.content LIKE ?)" : ""}
+      )`);
+      if (q) params.push(like, like);
+    } else if (filter === "media") {
+      where.push(`EXISTS (
+        SELECT 1 FROM attachments a
+        WHERE a.message_id = m.id
+          AND (a.mime_type LIKE 'image/%' OR a.mime_type LIKE 'video/%' OR a.mime_type LIKE 'audio/%')
+          ${q ? "AND (a.file_name LIKE ? OR m.content LIKE ?)" : ""}
+      )`);
+      if (q) params.push(like, like);
+    } else if (q) {
+      where.push(`(
+        m.content LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM attachments a
+          WHERE a.message_id = m.id AND a.file_name LIKE ?
+        )
+      )`);
+      params.push(like, like);
+    }
+
+    const [rows] = await pool.query(
+      `SELECT m.*,
+              rm.content AS reply_content,
+              rm.type AS reply_type,
+              ru.username AS reply_sender_username,
+              ru.display_name AS reply_sender_name,
+              u.username AS sender_username,
+              u.display_name AS sender_name,
+              u.avatar_url AS sender_avatar
+       FROM messages m
+       JOIN users u ON u.id = m.sender_id
+       LEFT JOIN messages rm ON rm.id = m.reply_to_id
+       LEFT JOIN users ru ON ru.id = rm.sender_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY m.id DESC
+       LIMIT ?`,
+      [...params, limit],
+    );
+
+    const messages = await hydrateManyMessages(rows);
     res.json({ messages });
   } catch (err) { next(err); }
 };

@@ -18,7 +18,7 @@ import { compressImage, formatBytes } from "../utils/imageCompression";
 const EMOJIS = ["😀","😂","🥰","😍","🔥","👍","🙏","🎉","❤️","🇸🇳","😎","🙌","💪","😢","😮"];
 const MAX_VOICE_SECONDS = 300;
 
-export default function MessageInput({ onSend, onTyping }) {
+export default function MessageInput({ onSend, onTyping, replyTo, onCancelReply }) {
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [pending, setPending] = useState(null);
@@ -39,6 +39,7 @@ export default function MessageInput({ onSend, onTyping }) {
   const recordSecondsRef = useRef(0);
   const sendAfterStopRef = useRef(false);
   const textRef = useRef("");
+  const replyToRef = useRef(null);
 
   useEffect(() => () => {
     clearInterval(recordTimerRef.current);
@@ -48,6 +49,10 @@ export default function MessageInput({ onSend, onTyping }) {
   useEffect(() => {
     textRef.current = text;
   }, [text]);
+
+  useEffect(() => {
+    replyToRef.current = replyTo;
+  }, [replyTo]);
 
   function onChange(e) {
     const value = e.target.value;
@@ -124,12 +129,14 @@ export default function MessageInput({ onSend, onTyping }) {
               content: textRef.current.trim() || null,
               type: "audio",
               attachments: [voiceFile],
+              reply_to_id: replyToRef.current?.id || null,
             });
             setText("");
             setPending(null);
             setCompression(null);
             setVoiceDraft(null);
             setShowEmoji(false);
+            onCancelReply?.();
             onTyping?.(false);
           } catch (err) {
             toast.error(err.response?.data?.message || "Impossible d'envoyer la note vocale");
@@ -223,12 +230,18 @@ export default function MessageInput({ onSend, onTyping }) {
         else type = "file";
       }
 
-      await onSend({ content: text.trim() || null, type, attachments });
+      await onSend({
+        content: text.trim() || null,
+        type,
+        attachments,
+        reply_to_id: replyTo?.id || null,
+      });
       setText("");
       setPending(null);
       setCompression(null);
       removeVoiceDraft();
       setShowEmoji(false);
+      onCancelReply?.();
       onTyping?.(false);
     } catch (err) {
       toast.error(err.response?.data?.message || "Impossible d'envoyer");
@@ -239,6 +252,23 @@ export default function MessageInput({ onSend, onTyping }) {
 
   return (
     <div className="p-3 sm:p-4 bg-white/95 backdrop-blur border-t border-ink-100 relative">
+      {replyTo && (
+        <div className="flex items-center gap-3 p-3 mb-3 rounded-2xl bg-brand-50 border border-brand-100">
+          <div className="w-1 self-stretch rounded-full bg-brand-500" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-brand-800 truncate">
+              Réponse à {replyTo.sender_name || replyTo.sender_username || "un message"}
+            </div>
+            <div className="text-sm text-ink-600 truncate">
+              {replyTo.content || replyTo.attachments?.[0]?.file_name || replyTo.type}
+            </div>
+          </div>
+          <button type="button" onClick={onCancelReply} className="btn-ghost p-2 rounded-full" title="Annuler la réponse">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {pending && (
         <div className="flex items-center gap-3 p-3 mb-3 rounded-2xl bg-ink-50 border border-ink-100">
           <div className="w-9 h-9 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center">

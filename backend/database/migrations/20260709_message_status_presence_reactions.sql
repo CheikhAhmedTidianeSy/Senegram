@@ -1,9 +1,8 @@
--- Senegram - statuts messages, presence, pins et reactions
--- A appliquer sur une base existante apres backend/database/schema.sql.
+-- Migration MySQL/Aiven : statuts, présence, épingles, réactions.
 
 ALTER TABLE users
   ADD COLUMN is_online BOOLEAN NOT NULL DEFAULT FALSE AFTER status,
-  ADD INDEX idx_users_online_last_seen (is_online, last_seen);
+  ADD COLUMN last_seen DATETIME DEFAULT NULL AFTER is_online;
 
 ALTER TABLE messages
   ADD COLUMN sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER created_at,
@@ -13,10 +12,11 @@ ALTER TABLE messages
   ADD COLUMN pinned_by BIGINT UNSIGNED DEFAULT NULL AFTER is_pinned,
   ADD COLUMN pinned_at DATETIME DEFAULT NULL AFTER pinned_by,
   ADD INDEX idx_messages_status (conversation_id, sender_id, delivered_at, read_at),
-  ADD INDEX idx_messages_pinned (conversation_id, is_pinned, pinned_at),
-  ADD CONSTRAINT fk_messages_pinned_by FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE SET NULL;
+  ADD INDEX idx_messages_pinned (conversation_id, is_pinned, pinned_at);
 
-CREATE TABLE message_reactions (
+CREATE INDEX idx_users_online_last_seen ON users(is_online, last_seen);
+
+CREATE TABLE IF NOT EXISTS message_reactions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   message_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -26,4 +26,4 @@ CREATE TABLE message_reactions (
   INDEX idx_reactions_message (message_id, reaction),
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

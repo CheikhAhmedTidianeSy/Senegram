@@ -105,12 +105,29 @@ exports.removeMember = async (req, res, next) => {
     if (!self && !(await isGroupAdmin(req.params.id, req.user.id))) {
       return res.status(403).json({ message: "Admin requis" });
     }
+    const [[target]] = await pool.query(
+      `SELECT role FROM conversation_members WHERE conversation_id = ? AND user_id = ?`,
+      [req.params.id, req.params.userId],
+    );
+    if (!target) return res.status(404).json({ message: "Membre introuvable" });
+    if (target.role === "owner") {
+      return res.status(403).json({ message: "Impossible de retirer le propriétaire du groupe" });
+    }
+
     await pool.query(
       `DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?`,
       [req.params.id, req.params.userId],
     );
     const conversation = await buildConversation(req.params.id, req.user.id);
-    req.app.get("io").to(`conv:${req.params.id}`).emit("group:updated", { conversation });
+    const io = req.app.get("io");
+    const removedUserId = Number(req.params.userId);
+    io.onlineUsers?.get(removedUserId)?.forEach((socketId) => {
+      io.sockets.sockets.get(socketId)?.leave(`conv:${req.params.id}`);
+    });
+    io.to(`user:${removedUserId}`).emit("group:removed", {
+      conversation_id: Number(req.params.id),
+    });
+    io.to(`conv:${req.params.id}`).emit("group:updated", { conversation });
     res.json({ ok: true });
   } catch (err) { next(err); }
 };

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Phone, Video, MoreVertical, ArrowLeft, Pin, MessageCircle } from "lucide-react";
+import { Phone, Video, MoreVertical, ArrowLeft, Pin, MessageCircle, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 import Avatar       from "./Avatar";
@@ -7,7 +7,7 @@ import ConversationInfoModal from "./ConversationInfoModal";
 import MessageBubble from "./MessageBubble";
 import MessageInput  from "./MessageInput";
 
-import api        from "../services/api";
+import api, { fileUrl } from "../services/api";
 import { useAuth }    from "../context/AuthContext";
 import { useSocket }  from "../context/useSocket";
 import { useCall }    from "../context/CallContext";
@@ -28,6 +28,12 @@ export default function ChatWindow({
   const [loading,  setLoading]  = useState(true);
   const [typingUsers, setTypingUsers] = useState({});
   const [infoOpen, setInfoOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchFilter, setSearchFilter] = useState("all");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
 
   const scrollerRef = useRef(null);
   const typingTimer = useRef(null);
@@ -62,6 +68,10 @@ export default function ChatWindow({
 
     api.post(`/conversations/${conversation.id}/read`).catch(() => {});
     setTypingUsers({});
+    setSearchOpen(false);
+    setSearchQ("");
+    setSearchResults([]);
+    setReplyTo(null);
     return () => {
       live = false;
       clearTimeout(typingTimer.current);
@@ -69,6 +79,36 @@ export default function ChatWindow({
       typingStopTimers.current = {};
     };
   }, [conversation?.id]);
+
+  useEffect(() => {
+    if (!conversation || !searchOpen) return;
+    const q = searchQ.trim();
+    if (!q && searchFilter === "all") {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      api.get(`/messages/conversation/${conversation.id}/search`, {
+        params: { q, filter: searchFilter },
+      })
+        .then(({ data }) => {
+          if (!cancelled) setSearchResults(data.messages || []);
+        })
+        .catch(() => {
+          if (!cancelled) toast.error("Recherche impossible");
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [conversation?.id, searchOpen, searchQ, searchFilter]);
 
   // Socket listeners
   useEffect(() => {
@@ -94,6 +134,7 @@ export default function ChatWindow({
     const onDeleted = ({ id, conversation_id }) => {
       if (conversation_id !== conversation.id) return;
       setMessages((prev) => prev.map((x) => (x.id === id ? { ...x, is_deleted: 1, content: null } : x)));
+      setReplyTo((current) => (current?.id === id ? null : current));
     };
     const setTypingState = ({ conversation_id, user_id, username, is_typing }) => {
       if (conversation_id !== conversation.id || user_id === user.id) return;
@@ -195,10 +236,10 @@ export default function ChatWindow({
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typingText]);
 
-  async function sendMessage({ content, type, attachments }) {
+  async function sendMessage({ content, type, attachments, reply_to_id = null }) {
     try {
       const { data } = await api.post(`/messages/conversation/${conversation.id}`, {
-        content, type, attachments,
+        content, type, attachments, reply_to_id,
       });
       setMessages((prev) => {
         // Si le serveur a déjà broadcast via socket on évite le doublon
@@ -260,8 +301,29 @@ export default function ChatWindow({
     }
   }
 
+  async function deleteMessage(message) {
+    if (!window.confirm("Supprimer ce message pour tout le monde ?")) return;
+    try {
+      await api.delete(`/messages/${message.id}`);
+      setMessages((prev) => prev.map((m) => (
+        m.id === message.id ? { ...m, is_deleted: 1, content: null, attachments: [] } : m
+      )));
+      setReplyTo((current) => (current?.id === message.id ? null : current));
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Suppression impossible");
+    }
+  }
+
   function scrollToMessage(id) {
     document.getElementById(`message-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function openSearchResult(message) {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === message.id)) return prev;
+      return [...prev, message].sort((a, b) => a.id - b.id);
+    });
+    setTimeout(() => scrollToMessage(message.id), 80);
   }
 
   function call(type) {
@@ -313,16 +375,87 @@ export default function ChatWindow({
           </div>
           </div>
         </button>
-        <button className="btn-ghost p-2 rounded-full" onClick={() => call("audio")} title="Appel audio">
+        <button className="btn-ghost p-2 rounded-full shrink-0" onClick={() => call("audio")} title="Appel audio">
           <Phone className="w-5 h-5" />
         </button>
-        <button className="btn-ghost p-2 rounded-full" onClick={() => call("video")} title="Appel vidéo">
+        <button className="btn-ghost p-2 rounded-full shrink-0" onClick={() => call("video")} title="Appel vidéo">
           <Video className="w-5 h-5" />
         </button>
-        <button className="btn-ghost p-2 rounded-full" title="Options">
+        <button
+          className="btn-ghost p-2 rounded-full shrink-0"
+          onClick={() => setSearchOpen((v) => !v)}
+          title="Rechercher"
+        >
+          {searchOpen ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+        </button>
+        <button className="btn-ghost p-2 rounded-full shrink-0 hidden sm:inline-flex" title="Options">
           <MoreVertical className="w-5 h-5" />
         </button>
       </div>
+
+      {searchOpen && (
+        <div className="bg-white/95 border-b border-ink-100 px-3 sm:px-4 py-3 shadow-bubble">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+              <input
+                className="input pl-10 bg-ink-50 border-ink-100"
+                placeholder="Rechercher messages, photos, médias..."
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex gap-1 mt-2 overflow-x-auto">
+            {[
+              ["all", "Tout"],
+              ["messages", "Messages"],
+              ["photos", "Photos"],
+              ["media", "Médias"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSearchFilter(value)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                  searchFilter === value ? "bg-brand-600 text-white" : "bg-ink-50 text-ink-700 hover:bg-ink-100"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {(searchQ.trim() || searchFilter !== "all") && (
+            <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-ink-100 bg-white">
+              {searchLoading ? (
+                <div className="px-3 py-4 text-sm text-ink-500">Recherche...</div>
+              ) : searchResults.length ? (
+                searchResults.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => openSearchResult(m)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-ink-50 border-b last:border-b-0 border-ink-100"
+                  >
+                    <SearchThumb message={m} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-ink-700 truncate">
+                        {m.sender_name || m.sender_username}
+                      </div>
+                      <div className="text-sm text-ink-600 truncate">
+                        {m.content || m.attachments?.[0]?.file_name || m.type}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-4 text-sm text-ink-500">Aucun résultat</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollerRef} className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-1.5 chat-pattern">
@@ -369,6 +502,8 @@ export default function ChatWindow({
                     currentUserId={user.id}
                     onReact={reactToMessage}
                     onRemoveReaction={removeReaction}
+                    onReply={setReplyTo}
+                    onDelete={deleteMessage}
                     onPin={pinMessage}
                     onUnpin={unpinMessage}
                   />
@@ -383,7 +518,12 @@ export default function ChatWindow({
       </div>
 
       {/* Input */}
-      <MessageInput onSend={sendMessage} onTyping={onTyping} />
+      <MessageInput
+        onSend={sendMessage}
+        onTyping={onTyping}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+      />
 
       {infoOpen && (
         <ConversationInfoModal
@@ -397,6 +537,24 @@ export default function ChatWindow({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function SearchThumb({ message }) {
+  const first = message.attachments?.[0];
+  if (first?.mime_type?.startsWith("image/")) {
+    return (
+      <img
+        src={fileUrl(first.url)}
+        alt=""
+        className="w-10 h-10 rounded-lg object-cover bg-ink-100"
+      />
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center">
+      <MessageCircle className="w-5 h-5" />
     </div>
   );
 }

@@ -61,6 +61,10 @@ export default function Home() {
         conversationId: conversation.id,
       });
     };
+    const onGroupRemoved = ({ conversation_id }) => {
+      removeConversation(conversation_id);
+      toast("Tu as été retiré du groupe");
+    };
     const onPresence = ({ user_id, status, last_seen }) => {
       setConversations((prev) => prev.map((c) => ({
         ...c,
@@ -106,6 +110,7 @@ export default function Home() {
 
     socket.on("message:new", onNew);
     socket.on("group:added", onGroupAdded);
+    socket.on("group:removed", onGroupRemoved);
     socket.on("user_online", onPresence);
     socket.on("user_offline", onPresence);
     socket.on("presence:update", onPresence);
@@ -114,6 +119,7 @@ export default function Home() {
     return () => {
       socket.off("message:new", onNew);
       socket.off("group:added", onGroupAdded);
+      socket.off("group:removed", onGroupRemoved);
       socket.off("user_online", onPresence);
       socket.off("user_offline", onPresence);
       socket.off("presence:update", onPresence);

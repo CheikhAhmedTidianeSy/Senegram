@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Check, CheckCheck, Download, FileText, Pin, PinOff, SmilePlus } from "lucide-react";
+import { Check, CheckCheck, Download, FileText, Pause, Pin, PinOff, Play, Reply, SmilePlus, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { fileUrl } from "../services/api";
 
@@ -8,6 +8,13 @@ const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
 function timeHHMM(d) {
   try { return format(new Date(d), "HH:mm"); } catch { return ""; }
+}
+
+function fmtDuration(seconds = 0) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(safe / 60).toString().padStart(2, "0");
+  const s = (safe % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function messageStatus(message) {
@@ -31,6 +38,8 @@ export default function MessageBubble({
   canPin = false,
   onReact,
   onRemoveReaction,
+  onReply,
+  onDelete,
   onPin,
   onUnpin,
   currentUserId,
@@ -75,7 +84,7 @@ export default function MessageBubble({
         className={cls}
         onDoubleClick={() => message.type !== "system" && setShowPicker((v) => !v)}
       >
-        {showPicker && message.type !== "system" && (
+        {showPicker && message.type !== "system" && !message.is_deleted && (
           <div
             className={clsx(
               "absolute z-20 bottom-full mb-1 flex items-center gap-1 rounded-full bg-white px-1.5 py-1 shadow-soft border border-ink-100",
@@ -104,10 +113,29 @@ export default function MessageBubble({
           </div>
         )}
 
-        {message.type === "system" ? (
+        {message.is_deleted ? (
+          <div className="italic text-sm opacity-75">Message supprimé</div>
+        ) : message.type === "system" ? (
           <div className="italic text-sm">{message.content}</div>
         ) : (
           <>
+            {message.reply_to_id && (
+              <button
+                type="button"
+                className={clsx(
+                  "w-full text-left mb-1.5 px-2.5 py-1.5 rounded-xl border-l-4 bg-black/5",
+                  isMe ? "border-white/70" : "border-brand-500",
+                )}
+                title="Message cité"
+              >
+                <div className="text-[11px] font-semibold truncate">
+                  {message.reply_sender_name || message.reply_sender_username || "Message"}
+                </div>
+                <div className="text-xs opacity-75 truncate">
+                  {message.reply_content || message.reply_type || "Pièce jointe"}
+                </div>
+              </button>
+            )}
             {message.attachments?.map((a) => (
               <Attachment key={a.id} a={a} />
             ))}
@@ -138,7 +166,7 @@ export default function MessageBubble({
         </div>
         )}
 
-        {message.type !== "system" && (
+        {message.type !== "system" && !message.is_deleted && (
           <div className={clsx(
             "absolute top-1/2 -translate-y-1/2 flex gap-1 transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
             isMe ? "justify-end" : "justify-start",
@@ -152,6 +180,24 @@ export default function MessageBubble({
             >
               <SmilePlus className="w-4 h-4" />
             </button>
+            <button
+              type="button"
+              className="w-7 h-7 rounded-full bg-white text-ink-700 border border-ink-100 shadow-bubble flex items-center justify-center hover:bg-ink-50"
+              title="Répondre"
+              onClick={() => onReply?.(message)}
+            >
+              <Reply className="w-4 h-4" />
+            </button>
+            {isMe && (
+              <button
+                type="button"
+                className="w-7 h-7 rounded-full bg-white text-senegal-red border border-ink-100 shadow-bubble flex items-center justify-center hover:bg-ink-50"
+                title="Supprimer pour tout le monde"
+                onClick={() => onDelete?.(message)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {canPin && (
               <button
                 type="button"
@@ -198,12 +244,7 @@ function Attachment({ a }) {
     return <video src={url} controls className="rounded-xl max-h-72 mb-1" />;
   }
   if (a.mime_type?.startsWith("audio/")) {
-    return (
-      <div className="min-w-[220px] mb-1">
-        <audio src={url} controls className="w-full" />
-        {a.duration ? <div className="text-[10px] opacity-70 mt-0.5">{Math.round(a.duration / 1000)}s</div> : null}
-      </div>
-    );
+    return <VoiceAttachment url={url} file={a} />;
   }
   return (
     <a href={url} target="_blank" rel="noreferrer"
@@ -215,5 +256,81 @@ function Attachment({ a }) {
       </div>
       <Download className="w-4 h-4 opacity-70" />
     </a>
+  );
+}
+
+function VoiceAttachment({ url, file }) {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(file.duration ? file.duration / 1000 : 0);
+  const [speed, setSpeed] = useState(1);
+  const progress = duration ? Math.min(100, (current / duration) * 100) : 0;
+
+  function toggle() {
+    if (!audioRef.current) return;
+    if (playing) audioRef.current.pause();
+    else audioRef.current.play();
+  }
+
+  function changeSpeed() {
+    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+    setSpeed(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  }
+
+  function seek(e) {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    audioRef.current.currentTime = ratio * duration;
+    setCurrent(audioRef.current.currentTime);
+  }
+
+  return (
+    <div className="min-w-[230px] max-w-[300px] mb-1 rounded-2xl bg-black/5 px-2.5 py-2">
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCurrent(0); }}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || duration)}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggle}
+          className="w-9 h-9 rounded-full bg-white/90 text-ink-900 flex items-center justify-center shadow-bubble"
+          title={playing ? "Pause" : "Lire"}
+        >
+          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={seek}
+          className="flex-1 h-7 flex items-center"
+          title="Avancer dans la note vocale"
+        >
+          <span className="w-full h-1.5 rounded-full bg-black/10 overflow-hidden">
+            <span className="block h-full rounded-full bg-brand-500" style={{ width: `${progress}%` }} />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={changeSpeed}
+          className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white/70 text-ink-800"
+          title="Vitesse de lecture"
+        >
+          {speed}x
+        </button>
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] opacity-70">
+        <span>{fmtDuration(current)}</span>
+        <span>{fmtDuration(duration)}</span>
+      </div>
+    </div>
   );
 }

@@ -1,63 +1,88 @@
-require('dotenv').config();
-const mysql = require('mysql2/promise');
-const fs = require('fs');
-const path = require('path');
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+const mysql = require("mysql2/promise");
+
+function sslConfig() {
+  if (process.env.DB_SSL !== "true") return undefined;
+  if (process.env.DB_CA_CERT) {
+    return { ca: process.env.DB_CA_CERT.replace(/\\n/g, "\n") };
+  }
+  if (process.env.DB_CA_PATH && fs.existsSync(process.env.DB_CA_PATH)) {
+    return { ca: fs.readFileSync(process.env.DB_CA_PATH, "utf8") };
+  }
+  return { rejectUnauthorized: true };
+}
+
+function configFromUrl(url) {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname,
+    port: Number(parsed.port) || 3306,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\//, "") || process.env.DB_NAME || "senegram",
+  };
+}
+
+function splitSql(schema) {
+  return schema
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
 
 async function initDatabase() {
-  const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-  };
+  const url = process.env.MYSQL_URL || process.env.DATABASE_URL;
+  const dbName = process.env.DB_NAME || "senegram";
+  const baseConfig = url
+    ? configFromUrl(url)
+    : {
+        host: process.env.DB_HOST || "localhost",
+        port: Number(process.env.DB_PORT) || 3306,
+        user: process.env.DB_USER || "root",
+        password: process.env.DB_PASSWORD || "",
+      };
 
-  const dbName = process.env.DB_NAME || 'senegram';
-
-  console.log(`🔧 Connexion à MySQL: ${dbConfig.host}:${dbConfig.port}`);
-  
   let connection;
   try {
-    connection = await mysql.createConnection(dbConfig);
-    console.log('✅ Connecté à MySQL');
+    console.log(`🔧 Connexion à MySQL: ${baseConfig.host}:${baseConfig.port}`);
+    connection = await mysql.createConnection({
+      ...baseConfig,
+      multipleStatements: false,
+      ssl: sslConfig(),
+    });
+    console.log("✅ Connecté à MySQL");
 
-    // Créer la base si elle n'existe pas
-    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    console.log(`✅ Base de données "${dbName}" prête`);
-
-    await connection.query(`USE \`${dbName}\``);
-
-    // Lire et exécuter le schéma
-    const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
-    
-    // Séparer les statements (gestion basique)
-    const statements = schema
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s && !s.startsWith('--'));
+    const schemaPath = path.join(__dirname, "..", "database", "schema.sql");
+    const statements = splitSql(fs.readFileSync(schemaPath, "utf8"))
+      .filter((stmt) => {
+        if (url && /^CREATE DATABASE/i.test(stmt)) return false;
+        if (url && /^USE /i.test(stmt)) return false;
+        return true;
+      });
 
     console.log(`📋 Exécution de ${statements.length} statements...`);
-    
     for (const stmt of statements) {
       try {
         await connection.query(stmt);
       } catch (err) {
-        // Ignore les erreurs "already exists" etc.
-        if (!err.message.includes('already exists') && !err.message.includes('Duplicate')) {
-          console.error('⚠️ Erreur statement:', err.message);
+        if (!/already exists|Duplicate|exists/i.test(err.message)) {
+          console.error("⚠️ Erreur statement:", err.message);
+          throw err;
         }
       }
     }
 
-    console.log('✅ Schéma de base de données initialisé avec succès');
-
-    // Vérifier les tables
-    const [tables] = await connection.query('SHOW TABLES');
-    console.log('\n📊 Tables créées:');
-    tables.forEach(t => console.log(`  - ${Object.values(t)[0]}`));
-
+    const [tables] = await connection.query("SHOW TABLES");
+    console.log("✅ Schéma MySQL initialisé");
+    console.log("\n📊 Tables:");
+    tables.forEach((t) => console.log(`  - ${Object.values(t)[0]}`));
   } catch (err) {
-    console.error('❌ Erreur initialisation DB:', err.message);
+    console.error("❌ Erreur initialisation DB:", err.message);
     process.exit(1);
   } finally {
     if (connection) await connection.end();

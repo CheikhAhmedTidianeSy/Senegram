@@ -17,6 +17,13 @@ module.exports = function callSocket(io, socket) {
   socket.on("call:invite", async ({ conversation_id, to_user_id, type, sdp_offer }) => {
     if (!conversation_id || !to_user_id) return;
     try {
+      if (!io.onlineUsers?.has(Number(to_user_id))) {
+        socket.emit("call:unavailable", {
+          to_user_id,
+          message: "Utilisateur indisponible pour le moment",
+        });
+        return;
+      }
       const [r] = await pool.query(
         `INSERT INTO calls (conversation_id, caller_id, type, status) VALUES (?, ?, ?, 'ringing')`,
         [conversation_id, userId, type || "audio"],
