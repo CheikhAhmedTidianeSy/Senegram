@@ -20,6 +20,12 @@ function initWebPush() {
 
 const webPushEnabled = initWebPush();
 
+function publicKey(_req, res) {
+  const key = process.env.VAPID_PUBLIC_KEY;
+  if (!key) return res.status(503).json({ message: "Push notifications not configured" });
+  res.json({ publicKey: key });
+}
+
 /**
  * Save push subscription for user
  */
@@ -183,6 +189,7 @@ async function testPush(req, res) {
 }
 
 module.exports = {
+  publicKey,
   subscribe,
   unsubscribe,
   sendToUser,

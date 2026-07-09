@@ -153,32 +153,6 @@ exports.list = async (req, res, next) => {
     res.json({ conversations });
   } catch (err) { next(err); }
 };
-}
-
-exports.list = async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(
-      `SELECT c.id
-       FROM conversations c
-       JOIN conversation_members cm ON cm.conversation_id = c.id
-       WHERE cm.user_id = ?
-       ORDER BY c.updated_at DESC`,
-      [req.user.id],
-    );
-    const out = [];
-    for (const r of rows) {
-      const full = await buildConversation(r.id, req.user.id);
-      if (full) out.push(full);
-    }
-    // Tri par last_message.id desc (conv vides en bas)
-    out.sort((a, b) => {
-      const ai = a.last_message?.id || 0;
-      const bi = b.last_message?.id || 0;
-      return bi - ai;
-    });
-    res.json({ conversations: out });
-  } catch (err) { next(err); }
-};
 
 exports.getOne = async (req, res, next) => {
   try {

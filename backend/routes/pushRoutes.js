@@ -3,6 +3,8 @@ const router = express.Router();
 const auth = require("../middlewares/auth");
 const pushController = require("../controllers/pushController");
 
+router.get("/public-key", pushController.publicKey);
+
 /**
  * POST /api/push/subscribe
  * Save push subscription for current user

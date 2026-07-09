@@ -2,28 +2,28 @@ import { useState } from "react";
 import { usePush } from "../context/PushContext";
 import { useAuth } from "../context/AuthContext";
 import { Bell, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import api from "../services/api";
 
 export default function PushTest() {
   const { user, token } = useAuth();
-  const { subscribe, unsubscribe, subscription, permission, loading } = usePush();
+  const { subscribe, unsubscribe, subscription, permission, loading, publicKey, pushSupported } = usePush();
   const [testResult, setTestResult] = useState(null);
 
   async function handleTestPush() {
     if (!token) return;
     setTestResult({ status: "loading", message: "Envoi notification test..." });
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/push/test`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      });
-      const data = await res.json();
+      const { data } = await api.post("/push/test");
       if (data.success) {
         setTestResult({ status: "success", message: `Notification envoyée ! (sent: ${data.sent}, failed: ${data.failed})` });
       } else {
         setTestResult({ status: "error", message: data.message || "Erreur" });
       }
     } catch (err) {
-      setTestResult({ status: "error", message: err.message });
+      setTestResult({
+        status: "error",
+        message: err.response?.data?.message || err.message,
+      });
     }
   }
 
@@ -37,6 +37,12 @@ export default function PushTest() {
       </h3>
 
       <div className="grid gap-2 text-sm">
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-ink-50">
+          <span className="font-medium">Support :</span>
+          <span className={pushSupported ? "text-green-600" : "text-red-600"}>
+            {pushSupported ? "OK" : "Non supporté"}
+          </span>
+        </div>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-ink-50">
           <span className="font-medium">Permission :</span>
           <span className={permission === "granted" ? "text-green-600" : "text-red-600"}>
@@ -57,7 +63,7 @@ export default function PushTest() {
         <div className="flex items-center gap-2 p-2 rounded-lg bg-ink-50">
           <span className="font-medium">VAPID Key :</span>
           <span className="text-xs text-ink-500 truncate max-w-[200px]">
-            {import.meta.env.VITE_VAPID_PUBLIC_KEY?.substring(0, 30)}...
+            {publicKey ? `${publicKey.substring(0, 30)}...` : "Non configurée"}
           </span>
         </div>
       </div>
@@ -65,7 +71,7 @@ export default function PushTest() {
       <div className="flex flex-wrap gap-2">
         <button
           onClick={subscribe}
-          disabled={loading || permission === "granted" && subscription}
+          disabled={!pushSupported || loading || (permission === "granted" && subscription)}
           className="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
@@ -83,7 +89,7 @@ export default function PushTest() {
 
         <button
           onClick={handleTestPush}
-          disabled={!subscription || loading}
+          disabled={!subscription || loading || !pushSupported}
           className="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 bg-brand-600 hover:bg-brand-700"
         >
           <Loader2 className="w-4 h-4" />
