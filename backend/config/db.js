@@ -1,5 +1,5 @@
 /**
- * Pool MySQL compatible Aiven.
+ * Pool MySQL compatible XAMPP / Aiven.
  * On expose un `pool` utilisable partout avec await pool.query(...).
  */
 const fs = require("fs");
@@ -14,7 +14,7 @@ function sslConfig() {
   if (process.env.DB_CA_PATH && fs.existsSync(process.env.DB_CA_PATH)) {
     return { ca: fs.readFileSync(process.env.DB_CA_PATH, "utf8") };
   }
-  return { rejectUnauthorized: true };
+  return { rejectUnauthorized: false };
 }
 
 function configFromUrl(url) {
@@ -61,4 +61,4 @@ pool
     console.error("❌ Impossible de se connecter à MySQL :", err.message);
   });
 
-module.exports = pool;
+module.exports = { pool };
