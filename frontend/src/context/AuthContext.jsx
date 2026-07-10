@@ -27,11 +27,19 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   async function login(identifier, password) {
-    const { data } = await api.post("/auth/login", { identifier, password });
-    localStorage.setItem("senegram_token", data.token);
-    localStorage.setItem("senegram_user", JSON.stringify(data.user));
-    setToken(data.token); setUser(data.user);
-    return data;
+    try {
+      const { data } = await api.post("/auth/login", { identifier, password });
+      localStorage.setItem("senegram_token", data.token);
+      localStorage.setItem("senegram_user", JSON.stringify(data.user));
+      setToken(data.token); setUser(data.user);
+      return data;
+    } catch (err) {
+      localStorage.removeItem("senegram_token");
+      localStorage.removeItem("senegram_user");
+      setToken(null);
+      setUser(null);
+      throw err;
+    }
   }
 
   async function register(payload) {
