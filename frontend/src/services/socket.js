@@ -17,9 +17,10 @@ export function connectSocket(token) {
   }
 
   socketToken = token;
+  const isProd = import.meta.env.PROD;
   socket = io(API_URL, {
     auth: { token },
-    transports: ["polling", "websocket"],
+    transports: isProd ? ["polling"] : ["polling", "websocket"],
     reconnection: true,
     upgrade: false,
   });
