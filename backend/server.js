@@ -165,6 +165,20 @@ app.use((err, req, res, _next) => {
 
 // ---------- Start ----------
 const PORT = process.env.PORT || 5000;
+
+// Cleanup stale online users every 5 minutes
+setInterval(async () => {
+  try {
+    const pool = require("./config/db");
+    await pool.query(
+      `UPDATE users SET is_online = 0, status = 'offline', last_seen = NOW()
+       WHERE is_online = 1 AND last_seen < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
+    );
+  } catch (err) {
+    console.error("Online users cleanup error:", err.message);
+  }
+}, 5 * 60 * 1000);
+
 server.listen(PORT, "0.0.0.0", () => {
   const proto = useHttps ? "https" : "http";
   console.log(`Senegram API lancée sur ${proto}://localhost:${PORT}`);

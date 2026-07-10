@@ -7,6 +7,8 @@ router.get("/storage/health", ctrl.storageHealth);
 
 router.use(auth);
 
+router.use(auth);
+
 // Un fichier quelconque (image, video, audio, document)
 router.post("/file", upload.single("file"), ctrl.uploadSingle);
 

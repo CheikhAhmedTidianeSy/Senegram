@@ -404,12 +404,6 @@ exports.markRead = async (req, res, next) => {
 
     const lastMessageId = await markConversationRead(convId, req.user.id);
     const io = req.app.get("io");
-    io.to(`conv:${convId}`).emit("message_read", {
-      conversation_id: Number(convId),
-      user_id: req.user.id,
-      last_message_id: lastMessageId,
-      read_at: new Date(),
-    });
     io.to(`conv:${convId}`).emit("message:read", {
       conversation_id: Number(convId),
       user_id: req.user.id,
