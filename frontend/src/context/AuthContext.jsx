@@ -5,10 +5,8 @@ const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(() => {
-    try { return JSON.parse(localStorage.getItem("senegram_user")); } catch { return null; }
-  });
-  const [token,   setToken]   = useState(() => localStorage.getItem("senegram_token"));
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem("senegram_token"));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +29,7 @@ export function AuthProvider({ children }) {
   async function login(identifier, password) {
     const { data } = await api.post("/auth/login", { identifier, password });
     localStorage.setItem("senegram_token", data.token);
-    localStorage.setItem("senegram_user",  JSON.stringify(data.user));
+    localStorage.setItem("senegram_user", JSON.stringify(data.user));
     setToken(data.token); setUser(data.user);
     return data;
   }
@@ -39,7 +37,7 @@ export function AuthProvider({ children }) {
   async function register(payload) {
     const { data } = await api.post("/auth/register", payload);
     localStorage.setItem("senegram_token", data.token);
-    localStorage.setItem("senegram_user",  JSON.stringify(data.user));
+    localStorage.setItem("senegram_user", JSON.stringify(data.user));
     setToken(data.token); setUser(data.user);
     return data;
   }
