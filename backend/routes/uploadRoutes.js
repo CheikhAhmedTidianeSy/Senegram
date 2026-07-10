@@ -5,6 +5,8 @@ const ctrl   = require("../controllers/uploadController");
 
 router.use(auth);
 
+router.get("/storage/health", ctrl.storageHealth);
+
 // Un fichier quelconque (image, video, audio, document)
 router.post("/file", upload.single("file"), ctrl.uploadSingle);
 

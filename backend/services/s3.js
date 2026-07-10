@@ -7,6 +7,7 @@ const {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { v4: uuidv4 } = require("uuid");
@@ -43,9 +44,12 @@ function createS3Client() {
       endpoint,
       credentials: { accessKeyId, secretAccessKey },
       forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     }),
     bucket,
     endpoint: stripTrailingSlash(endpoint),
+    region,
     publicUrl: stripTrailingSlash(env("S3_PUBLIC_URL", "B2_PUBLIC_URL", "BACKBLAZE_PUBLIC_URL")),
   };
 }
@@ -81,6 +85,7 @@ async function uploadToS3(file, uploadType = "message") {
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
+      ContentLength: file.size,
       CacheControl: "public, max-age=31536000", // 1 year
     }));
 
@@ -120,4 +125,38 @@ async function getPresignedUrl(key, expiresIn = 3600) {
   }
 }
 
-module.exports = { uploadToS3, deleteFromS3, getPresignedUrl, getPublicUrl, s3 };
+async function checkStorage() {
+  if (!s3) {
+    return {
+      ok: false,
+      configured: false,
+      message: "Stockage S3/Backblaze non configuré",
+    };
+  }
+
+  try {
+    await s3.client.send(new HeadBucketCommand({ Bucket: s3.bucket }));
+    return {
+      ok: true,
+      configured: true,
+      bucket: s3.bucket,
+      endpoint: s3.endpoint,
+      region: s3.region,
+      publicUrl: s3.publicUrl || getPublicUrl("test"),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: true,
+      bucket: s3.bucket,
+      endpoint: s3.endpoint,
+      region: s3.region,
+      publicUrl: s3.publicUrl || null,
+      error: err.name || err.code || "StorageError",
+      statusCode: err.$metadata?.httpStatusCode || null,
+      message: err.message,
+    };
+  }
+}
+
+module.exports = { uploadToS3, deleteFromS3, getPresignedUrl, getPublicUrl, checkStorage, s3 };

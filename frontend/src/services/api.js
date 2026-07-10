@@ -11,7 +11,9 @@ import axios from "axios";
  */
 function resolveApiUrl() {
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/+$/, "").replace(/\/api$/, "");
+    return import.meta.env.VITE_API_URL
+      .replace(/\/+$/, "")
+      .replace(/\/api(?:\/api)*$/, "");
   }
   if (import.meta.env.DEV) return "";
   if (typeof window !== "undefined" && window.location) {
@@ -31,6 +33,14 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  if (config.baseURL) {
+    config.baseURL = config.baseURL
+      .replace(/\/+$/, "")
+      .replace(/\/api\/api$/, "/api");
+  }
+  if (typeof config.url === "string") {
+    config.url = config.url.replace(/^\/api\/api\//, "/").replace(/^\/api\//, "/");
+  }
   const token = localStorage.getItem("senegram_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

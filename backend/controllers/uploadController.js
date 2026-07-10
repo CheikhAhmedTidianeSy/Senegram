@@ -1,6 +1,6 @@
 const path = require("path");
 const fs = require("fs");
-const { uploadToS3, s3 } = require("../services/s3");
+const { uploadToS3, checkStorage, s3 } = require("../services/s3");
 
 const AUDIO_MIMES = new Set(["audio/webm", "audio/mpeg", "audio/mp3", "audio/ogg", "audio/opus"]);
 const MAX_VOICE_SIZE = 10 * 1024 * 1024;
@@ -119,5 +119,12 @@ exports.uploadVoice = async (req, res, next) => {
         duration: Math.round(duration * 1000),
       },
     });
+  } catch (err) { next(err); }
+};
+
+exports.storageHealth = async (_req, res, next) => {
+  try {
+    const status = await checkStorage();
+    res.status(status.ok ? 200 : 503).json(status);
   } catch (err) { next(err); }
 };
