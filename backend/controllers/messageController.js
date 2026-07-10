@@ -269,6 +269,9 @@ exports.send = async (req, res, next) => {
     if ((!content || !content.trim()) && (!attachments || !attachments.length)) {
       return res.status(400).json({ message: "Message vide" });
     }
+    if (Array.isArray(attachments) && attachments.some((a) => !a?.url)) {
+      return res.status(400).json({ message: "Fichier invalide : URL manquante" });
+    }
 
     await conn.beginTransaction();
     const [r] = await conn.query(

@@ -1,6 +1,6 @@
 /**
- * S3-compatible storage service (Cloudflare R2, AWS S3, Supabase, etc.)
- * Configure via environment variables
+ * S3-compatible storage service (Backblaze B2, Cloudflare R2, AWS S3, etc.).
+ * Configure via S3_* variables. BACKBLAZE_/B2_* aliases are supported too.
  */
 const {
   S3Client,
@@ -12,16 +12,28 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 
+function env(...names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return "";
+}
+
+function stripTrailingSlash(value) {
+  return value ? value.replace(/\/+$/, "") : "";
+}
+
 // S3 client configuration
 function createS3Client() {
-  const endpoint = process.env.S3_ENDPOINT; // e.g., https://<account-id>.r2.cloudflarestorage.com
-  const region = process.env.S3_REGION || "auto"; // "auto" for R2
-  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
-  const bucket = process.env.S3_BUCKET;
+  const endpoint = env("S3_ENDPOINT", "B2_ENDPOINT", "BACKBLAZE_ENDPOINT");
+  const region = env("S3_REGION", "B2_REGION", "BACKBLAZE_REGION") || "auto";
+  const accessKeyId = env("S3_ACCESS_KEY_ID", "B2_KEY_ID", "BACKBLAZE_KEY_ID");
+  const secretAccessKey = env("S3_SECRET_ACCESS_KEY", "B2_APPLICATION_KEY", "BACKBLAZE_APPLICATION_KEY");
+  const bucket = env("S3_BUCKET", "B2_BUCKET", "BACKBLAZE_BUCKET");
 
   if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) {
-    console.warn("⚠️ S3 storage not fully configured - using local fallback");
+    console.warn("⚠️ Stockage S3/Backblaze incomplet");
     return null;
   }
 
@@ -30,8 +42,11 @@ function createS3Client() {
       region,
       endpoint,
       credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
     }),
     bucket,
+    endpoint: stripTrailingSlash(endpoint),
+    publicUrl: stripTrailingSlash(env("S3_PUBLIC_URL", "B2_PUBLIC_URL", "BACKBLAZE_PUBLIC_URL")),
   };
 }
 
@@ -47,10 +62,8 @@ function pickFolder(mimetype, uploadType) {
 
 function getPublicUrl(key) {
   if (!s3) return null;
-  // For R2 public buckets: https://pub-<bucket>.<account-id>.r2.dev/key
-  // For private buckets with presigned URLs, use getSignedUrl
-  const publicUrl = process.env.S3_PUBLIC_URL; // e.g., https://pub-xxx.r2.dev
-  if (publicUrl) return `${publicUrl}/${key}`;
+  if (s3.publicUrl) return `${s3.publicUrl}/${key}`;
+  if (s3.endpoint && s3.bucket) return `${s3.endpoint}/${s3.bucket}/${key}`;
   return null;
 }
 
@@ -72,6 +85,9 @@ async function uploadToS3(file, uploadType = "message") {
     }));
 
     const url = getPublicUrl(key);
+    if (!url) {
+      throw new Error("URL publique du stockage introuvable. Configure S3_PUBLIC_URL ou B2_PUBLIC_URL.");
+    }
     return { key, url, bucket: s3.bucket };
   } catch (err) {
     console.error("[S3] Upload error:", err);
