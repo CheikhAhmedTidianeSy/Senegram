@@ -129,6 +129,15 @@ app.use(
 // ---------- Routes ----------
 app.get("/health", (_req, res) => res.send("OK"));
 
+app.get("/version", (_req, res) =>
+  res.json({
+    app: "senegram-api",
+    env: process.env.NODE_ENV || "development",
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,
+    built_at: process.env.BUILD_TIME || null,
+  }),
+);
+
 app.get("/", (_req, res) =>
   res.json({
     app: "🇸🇳 Senegram API",
