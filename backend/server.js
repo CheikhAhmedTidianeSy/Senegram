@@ -95,11 +95,11 @@ app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 app.use(morgan("dev"));
 
-// Tolere les anciens bundles frontend qui appellent /api/api/...
+// Tolere les anciens bundles frontend qui appellent /api/api/... ou plus.
 // La vraie API reste montee sur /api.
 app.use((req, _res, next) => {
-  if (req.url.startsWith("/api/api/")) {
-    req.url = req.url.replace(/^\/api\/api/, "/api");
+  if (req.url.startsWith("/api/api")) {
+    req.url = req.url.replace(/^\/api(?:\/api)+(?=\/|$)/, "/api");
   }
   next();
 });
