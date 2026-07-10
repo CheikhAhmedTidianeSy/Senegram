@@ -34,6 +34,8 @@ export function PushProvider({ children }) {
     if (!pushSupported) return;
     navigator.serviceWorker.register("/sw.js").then((reg) => {
       console.log("[Push] SW registered:", reg.scope);
+      reg.update?.();
+      if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
     }).catch((err) => {
       console.error("[Push] SW registration failed:", err);
     });
@@ -141,15 +143,20 @@ export function PushProvider({ children }) {
       // Only show notification if document is not focused
       if (document.visibilityState === "visible") return;
       
-      const { message, conversation_id, from } = data;
+      const message = data?.message || data;
+      const conversation_id = data?.conversation_id || message?.conversation_id;
+      const from = data?.from || {
+        display_name: message?.sender_name,
+        username: message?.sender_username,
+      };
       if (message?.sender_id === user?.id) return; // Don't notify for own messages
       
       if (pushSupported && Notification.permission === "granted") {
         navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification(`${from?.display_name || from?.username}`, {
+          reg.showNotification(from?.display_name || from?.username || "Senegram", {
             body: message?.content || "Nouveau message",
-            icon: "/icons/icon-192.svg",
-            badge: "/icons/badge-72.svg",
+            icon: "/favicon.svg",
+            badge: "/favicon.svg",
             tag: `msg-${conversation_id}`,
             data: { url: `/conversation/${conversation_id}`, conversation_id },
             requireInteraction: true,

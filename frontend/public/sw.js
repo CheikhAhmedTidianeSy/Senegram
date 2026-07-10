@@ -1,8 +1,6 @@
 // Service Worker for Senegram Push Notifications
-const CACHE_NAME = 'senegram-v1';
+const CACHE_NAME = 'senegram-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/favicon.svg',
 ];
 
@@ -27,6 +25,19 @@ self.addEventListener('activate', (event) => {
 // Fetch - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (!STATIC_ASSETS.includes(url.pathname)) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
