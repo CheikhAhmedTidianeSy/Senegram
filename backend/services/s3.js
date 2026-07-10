@@ -75,9 +75,6 @@ function pickFolder(mimetype, uploadType) {
 function getPublicUrl(key) {
   if (!s3) return null;
   if (s3.publicUrl) return `${s3.publicUrl}/${key}`;
-  if (s3.isBackblaze) {
-    throw new Error("S3_PUBLIC_URL (or B2_PUBLIC_URL) is required for Backblaze B2. Format: https://f00X.backblazeb2.com/file/bucket-name");
-  }
   if (s3.endpoint && s3.bucket) return `${s3.endpoint}/${s3.bucket}/${key}`;
   return null;
 }
