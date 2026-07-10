@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/socket.io/(.*)",
-      "destination": "/socket.io/$1"
+      "destination": "https://senegram.onrender.com/socket.io/$1"
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "https://senegram.onrender.com/api/$1"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "/uploads/$1"
+      "destination": "https://senegram.onrender.com/uploads/$1"
     },
     {
       "source": "/(.*)",
